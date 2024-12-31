@@ -204,6 +204,12 @@ JSON_entry* JSON_newBool(bool value) {
 
 // generic
 
+static void _indent(FILE* buffer, int indent) {
+    for (int i = 0; i < indent; i++) {
+        fprintf(buffer, "    ");
+    }
+}
+
 void JSON_write(FILE* buffer, JSON_entry* entry, int indent) {
     switch (entry->type) {
         case STRING:
@@ -215,9 +221,7 @@ void JSON_write(FILE* buffer, JSON_entry* entry, int indent) {
         case OBJECT:
             fprintf(buffer, "{\n");
             for (int i = 0; i < entry->data.object.values->data.array.length; i++) {
-                for (int i = 0; i < indent; i++) {
-                    fprintf(buffer, "    ");
-                }
+                _indent(buffer, indent);
                 fprintf(buffer, "\"");
                 fprintf(buffer, "%s", entry->data.object.keys[i]);
                 fprintf(buffer, "\": ");
@@ -227,26 +231,20 @@ void JSON_write(FILE* buffer, JSON_entry* entry, int indent) {
                 }
             }
             fprintf(buffer, "\n");
-            for (int i = 0; i < indent - 1; i++) {
-                fprintf(buffer, "    ");
-            }
+            _indent(buffer, indent - 1);
             fprintf(buffer, "}");
             break;
         case ARRAY:
             fprintf(buffer, "[\n");
             for (int i = 0; i < entry->data.array.length; i++) {
-                for (int i = 0; i < indent; i++) {
-                    fprintf(buffer, "    ");
-                }
+                _indent(buffer, indent);
                 JSON_write(buffer, entry->data.array.items[i], indent + 1);
                 if (i != entry->data.array.length - 1) {
                     fprintf(buffer, ",\n");
                 }
             }
             fprintf(buffer, "\n");
-            for (int i = 0; i < indent - 1; i++) {
-                fprintf(buffer, "    ");
-            }
+            _indent(buffer, indent - 1);
             fprintf(buffer, "]");
             break;
         case BOOL:
@@ -254,7 +252,7 @@ void JSON_write(FILE* buffer, JSON_entry* entry, int indent) {
             fprintf(buffer, "%s", args[entry->data.boolean]);
             break;
         case NULLTYPE:
-            fprintf(buffer, "[NULL]");
+            fprintf(buffer, "null");
             break;
         default:
             break;
