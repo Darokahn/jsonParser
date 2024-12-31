@@ -167,38 +167,109 @@ JSON_entry* JSON_update(JSON_entry* entry, char* key, JSON_entry* value) {
     }
 }
 
+// string
+
+JSON_entry* JSON_newString(char* base) {
+    JSON_entry* entry = malloc(sizeof(JSON_entry));
+    entry->type = STRING;
+
+    entry->data.string.str = strdup(base);
+    entry->data.string.length = strlen(base);
+    entry->data.string.capacity = entry->data.string.length;
+    return entry;
+}
+
+// number, bool
+
+JSON_entry* JSON_newNumber(double value) {
+    JSON_entry* entry = malloc(sizeof(JSON_entry));
+    *entry = (JSON_entry) {
+        .type = NUMBER,
+        .data = {
+            .number = value
+        }
+    };
+    return entry;
+}
+JSON_entry* JSON_newBool(bool value) {
+    JSON_entry* entry = malloc(sizeof(JSON_entry));
+    *entry = (JSON_entry) {
+        .type = BOOL,
+        .data = {
+            .boolean = value
+        }
+    };
+    return entry;
+}
+
+// generic
+
+void JSON_write(FILE* buffer, JSON_entry* entry, int indent) {
+    switch (entry->type) {
+        case STRING:
+            fprintf(buffer, "\"%s\"", entry->data.string.str);
+            break;
+        case NUMBER:
+            fprintf(buffer, "%g", entry->data.number);
+            break;
+        case OBJECT:
+            fprintf(buffer, "{\n");
+            for (int i = 0; i < entry->data.object.values->data.array.length; i++) {
+                for (int i = 0; i < indent; i++) {
+                    fprintf(buffer, "    ");
+                }
+                fprintf(buffer, "\"");
+                fprintf(buffer, "%s", entry->data.object.keys[i]);
+                fprintf(buffer, "\": ");
+                JSON_write(buffer, entry->data.object.values->data.array.items[i], indent + 1);
+                if (i != entry->data.object.values->data.array.length - 1) {
+                    fprintf(buffer, ",\n");
+                }
+            }
+            fprintf(buffer, "\n");
+            for (int i = 0; i < indent - 1; i++) {
+                fprintf(buffer, "    ");
+            }
+            fprintf(buffer, "}");
+            break;
+        case ARRAY:
+            fprintf(buffer, "[\n");
+            for (int i = 0; i < entry->data.array.length; i++) {
+                for (int i = 0; i < indent; i++) {
+                    fprintf(buffer, "    ");
+                }
+                JSON_write(buffer, entry->data.array.items[i], indent + 1);
+                if (i != entry->data.array.length - 1) {
+                    fprintf(buffer, ",\n");
+                }
+            }
+            fprintf(buffer, "\n");
+            for (int i = 0; i < indent - 1; i++) {
+                fprintf(buffer, "    ");
+            }
+            fprintf(buffer, "]");
+            break;
+        case BOOL:
+            char* args[] = {"false", "true"};
+            fprintf(buffer, "%s", args[entry->data.boolean]);
+            break;
+        case NULLTYPE:
+            fprintf(buffer, "[NULL]");
+            break;
+        default:
+            break;
+    }
+}
+
 int main(void) {
     JSON_entry* obj = JSON_newObj();
-    JSON_entry newNumber1 = {
-        .type = NUMBER,
-        .data = {
-            .number = 69
-        }
-    };
-    JSON_entry newNumber2 = {
-        .type = NUMBER,
-        .data = {
-            .number = 1
-        }
-    };
-    JSON_entry newNumber3 = {
-        .type = NUMBER,
-        .data = {
-            .number = 3
-        }
-    };
-    JSON_update(obj, "hello", &newNumber1);
-    JSON_update(obj, "hello", &newNumber1);
-    JSON_update(obj, "hello!", &newNumber2);
-    JSON_update(obj, "newkey", &newNumber3);
-    JSON_update(obj, "1", &newNumber3);
-    JSON_update(obj, "2", &newNumber3);
-    JSON_update(obj, "3", &newNumber3);
-    JSON_update(obj, "4", &newNumber3);
-    JSON_update(obj, "5", &newNumber3);
-    JSON_update(obj, "6", &newNumber3);
-    JSON_update(obj, "7", &newNumber3);
-    JSON_update(obj, "8", &newNumber3);
-    JSON_update(obj, "9", &newNumber3);
-    printf("%f\n", JSON_access(obj, "9")->data.number);
+    JSON_update(obj, "numbers", JSON_newObj());
+    JSON_update(obj, "array", JSON_newArray());
+    JSON_update(JSON_access(obj, "numbers"), "1", JSON_newNumber(69));
+    JSON_update(JSON_access(obj, "numbers"), "2", JSON_newNumber(100));
+    JSON_append(JSON_access(obj, "array"), JSON_newNumber(12));
+    JSON_append(JSON_access(obj, "array"), JSON_newNumber(12));
+    JSON_append(JSON_access(obj, "array"), JSON_newObj());
+    JSON_update(JSON_index(JSON_access(obj, "array"), 2), "hello", JSON_newString("world"));
+    JSON_write(stdout, obj, 1);
 }
