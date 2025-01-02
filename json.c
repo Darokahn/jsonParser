@@ -16,9 +16,6 @@
  * * parser doesn't convert escaped sequences in strings to their literal byte values
  * * fails unpredictably if invalid json is passed
  * * a few important functions have not been written (JSON_remove, JSON_deepAccess, JSON_deepWaccess, JSON_perror)
- * 
- * current bugs:
- * * whitespace in strings is removed
 */
 
 // array
@@ -517,6 +514,14 @@ static int stripWhitespace(char* string) {
     for(; !isspace(*nextEmpty); nextEmpty++) if (*nextEmpty == 0) break;
     for(head = nextEmpty; *head != 0; head++) {
         if (isspace(*head)) continue;
+        if (*head == '\"') {
+            char* temp = head;
+            head = skipString(head);
+            for (; temp < head; temp++) {
+                *nextEmpty = *temp;
+                nextEmpty++;
+            }
+        }
         total++;
         *nextEmpty = *head;
         nextEmpty++;
@@ -525,10 +530,12 @@ static int stripWhitespace(char* string) {
     return total;
 }
 
-JSON_entry* JSON_fromString(char* string) {
+static JSON_entry* _JSON_fromString(char* string, bool base) {
     JSON_textEntry* entry = malloc(sizeof(JSON_textEntry));
-    string = strdup(string); // we need to write to it
-    stripWhitespace(string);
+    if (base) {
+        string = strdup(string); // we need to write to it
+        stripWhitespace(string);
+    }
     string = arrayNext(string, entry);
     JSON_entry* returnVal;
     char* nullTerminated = strndup(entry->firstChar, entry->length);
@@ -554,7 +561,7 @@ JSON_entry* JSON_fromString(char* string) {
                 }
                 char* key = strndup(entry->name, entry->nameLength);
                 char* objValue = strndup(entry->firstChar, entry->length);
-                JSON_update(returnVal, key, JSON_fromString(objValue));
+                JSON_update(returnVal, key, _JSON_fromString(objValue, false));
                 free(key);
                 free(objValue);
             } while (nullTerminated != NULL);
@@ -569,7 +576,7 @@ JSON_entry* JSON_fromString(char* string) {
                     break;
                 }
                 char* appendValue = strndup(entry->firstChar, entry->length);
-                JSON_append(returnVal, JSON_fromString(appendValue));
+                JSON_append(returnVal, _JSON_fromString(appendValue, false));
                 free(appendValue);
             } while (nullTerminated != NULL);
             break;
@@ -583,8 +590,12 @@ JSON_entry* JSON_fromString(char* string) {
             break;
     }
     free(original);
-    free(string);
+    if (base) free(string);
     return returnVal;
+}
+
+JSON_entry* JSON_fromString(char* string) {
+    return _JSON_fromString(string, true);
 }
 
 JSON_entry* JSON_fromFile(char* filename) {
