@@ -1,0 +1,98 @@
+{
+  "id": 12345,
+  "name": "Sample Data",
+  "metadata": {
+    "created": "2025-01-02T10:00:00Z",
+    "modified": "2025-01-02T12:00:00Z",
+    "tags": ["example", "test", "data"],
+    "status": {
+      "active": true,
+      "lastChecked": null,
+      "history": [
+        {
+          "timestamp": "2024-12-31T23:59:59Z",
+          "action": "created",
+          "user": {
+            "id": 987,
+            "name": "Alice",
+            "roles": ["admin", "editor"]
+          }
+        },
+        {
+          "timestamp": "2025-01-01T12:00:00Z",
+          "action": "updated",
+          "user": {
+            "id": 123,
+            "name": "Bob",
+            "roles": ["viewer"]
+          }
+        }
+      ]
+    }
+  },
+  "data": [
+    {
+      "type": "integer",
+      "value": 42,
+      "details": {
+        "description": "The answer to life, the universe, and everything",
+        "source": "Douglas Adams"
+      }
+    },
+    {
+      "type": "string",
+      "value": "Hello, World!",
+      "details": {
+        "description": "A common test message",
+        "format": "text/plain"
+      }
+    },
+    {
+      "type": "object",
+      "value": {
+        "nestedKey1": "nestedValue1",
+        "nestedKey2": ["item1", "item2", "item3"],
+        "nestedKey3": {
+          "deepKey1": 1,
+          "deepKey2": 2
+        }
+      },
+      "details": {
+        "description": "An example of a nested object",
+        "source": "Generated"
+      }
+    }
+  ],
+  "config": {
+    "options": {
+      "enableFeatureX": true,
+      "maxRetries": 3,
+      "timeout": 15.5
+    },
+    "endpoints": [
+      {
+        "name": "ServiceA",
+        "url": "https://api.example.com/serviceA",
+        "methods": ["GET", "POST"]
+      },
+      {
+        "name": "ServiceB",
+        "url": "https://api.example.com/serviceB",
+        "methods": ["GET"]
+      }
+    ]
+  },
+  "notes": [
+    {
+      "id": 1,
+      "text": "This is the first note.",
+      "important": false
+    },
+    {
+      "id": 2,
+      "text": "This note is marked as important.",
+      "important": true
+    }
+  ]
+}
+

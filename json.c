@@ -619,7 +619,7 @@ void JSON_perror(void) {
 }
 
 int main(void) {
-    JSON_entry* results = JSON_fromFile("test.json");
+    JSON_entry* results = JSON_fromFile("nocrash.json");
     JSON_write(stdout, results, 1);
     JSON_free(results, true);
 }
