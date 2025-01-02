@@ -358,10 +358,10 @@ static char* skipNumber(char* start) {
 static char* skipBool(char* start) {
     char trueText[] = "true";
     char falseText[] = "false";
-    if (strcmp(start, trueText) == 0) {
+    if (strncmp(start, trueText, sizeof(trueText) - 1) == 0) {
         start += sizeof(trueText) - 1;
     }
-    else if (strcmp(start, falseText) == 0) {
+    else if (strncmp(start, falseText, sizeof(falseText) - 1) == 0) {
         start += sizeof(falseText) - 1;
     }
     return start;
@@ -369,7 +369,7 @@ static char* skipBool(char* start) {
 
 char* skipNull(char* start) {
     char nullText[] = "null";
-    if (strcmp(start, nullText)) {
+    if (strncmp(start, nullText, sizeof(nullText) - 1) == 0) {
         start += sizeof(nullText) - 1;
     }
     return start;
