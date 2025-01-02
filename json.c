@@ -17,8 +17,6 @@
  * * parser doesn't convert escaped sequences in strings to their literal byte values
  * * fails unpredictably if invalid json is passed
  * * a few important functions have not been written (JSON_remove, JSON_deepAccess, JSON_deepWaccess, JSON_perror)
- *
- * * currently broken 😭
 */
 
 // array
@@ -561,7 +559,8 @@ void JSON_perror(void) {
 }
 
 int main(void) {
-    char* test = "{\"string\":\"example\",\"number\":123.456,\"object\":{\"key\":\"value\"},\"array\":[1,true,null],\"boolean\":false,\"nullValue\":null}";
+    char* test = "{\"name\":\"John\",\"age\":30,\"isEmployed\":true,\"address\":{\"street\":\"123 Main St\",\"city\":\"Anytown\",\"zipcode\":\"12345\"},\"phoneNumbers\":[{\"type\":\"home\",\"number\":\"555-1234\"},{\"type\":\"work\",\"number\":\"555-5678\"}],\"children\":[{\"name\":\"Alice\",\"age\":5},{\"name\":\"Bob\",\"age\":8}],\"spouse\":null}";
+   // char* test = "{\"string\":\"example\",\"number\":123.456,\"object\":{\"key\":\"value\"},\"array\":[1,true,null],\"boolean\":false,\"nullValue\":null}";
     JSON_entry* result = JSON_fromString(test);
     JSON_write(stdout, result, 1);
 }
