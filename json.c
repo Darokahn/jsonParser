@@ -9,7 +9,7 @@
  * THIS IS CURRENTLY MARK 0
  * it is a naive little baby program. It believes anything you give it to parse is valid JSON.
  * if you give it invalid JSON, the little baby will segfault.
- * it currently fails when given an empty array or object.
+ * it currently fails when given an empty object.
  *
  * current limitations:
  * * parser doesn't handle scientific notation numbers (should be easy)
@@ -568,7 +568,7 @@ void JSON_perror(void) {
 }
 
 int main(void) {
-    char* test = "{\"menu\":{\"id\":\"file\",\"value\":\"File\",\"popup\":{\"menuitem\":[{\"value\":\"New\",\"onclick\":\"CreateNewDoc()\"},{\"value\":\"Open\",\"onclick\":\"OpenDoc()\"},{\"value\":\"Close\",\"onclick\":\"CloseDoc()\"}]}},\"data\":{\"array\":[1,2,3,4],\"nested\":{\"key1\":true,\"key2\":null,\"key3\":{\"subkey\":\"value\",\"subarray\":[{\"id\":1,\"name\":\"Alice\"},{\"id\":2,\"name\":\"Bob\"}]}},\"emptyObject\":{\"test\": 1},\"emptyArray\":[1]},\"numbers\":{\"int\":123,\"float\":123.456,\"scientific\":1e10,\"negative\":-42},\"bools\":[true,false,true],\"string\":\"This is a test string with \\\"escaped quotes\\\" and a unicode character: \\u2603\"}";
+    char* test = "{\"menu\":{\"id\":\"file\",\"value\":\"File\",\"popup\":{\"menuitem\":[{\"value\":\"New\",\"onclick\":\"CreateNewDoc()\"},{\"value\":\"Open\",\"onclick\":\"OpenDoc()\"},{\"value\":\"Close\",\"onclick\":\"CloseDoc()\"}]}},\"data\":{\"array\":[1,2,3,4],\"nested\":{\"key1\":true,\"key2\":null,\"key3\":{\"subkey\":\"value\",\"subarray\":[{\"id\":1,\"name\":\"Alice\"},{\"id\":2,\"name\":\"Bob\"}]}},\"emptyObject\":{\"test\": 1},\"emptyArray\":[]},\"numbers\":{\"int\":123,\"float\":123.456,\"scientific\":1e10,\"negative\":-42},\"bools\":[true,false,true],\"string\":\"This is a test string with \\\"escaped quotes\\\" and a unicode character: \\u2603\"}";
     //char* test = "{\"string\":\"example\",\"number\":123.456,\"object\":{\"key\":\"value\"},\"array\":[1,true,null],\"boolean\":false,\"nullValue\":null}";
     JSON_entry* result = JSON_fromString(test);
     JSON_write(stdout, result, 1);
