@@ -16,6 +16,9 @@
  * * parser doesn't convert escaped sequences in strings to their literal byte values
  * * fails unpredictably if invalid json is passed
  * * a few important functions have not been written (JSON_remove, JSON_deepAccess, JSON_deepWaccess, JSON_perror)
+ * 
+ * current bugs:
+ * * whitespace in strings is removed
 */
 
 // array
