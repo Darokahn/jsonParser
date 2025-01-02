@@ -3,6 +3,8 @@
 #include <string.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
 #include "json.h"
 
 /*
@@ -176,6 +178,9 @@ JSON_entry* JSON_update(JSON_entry* entry, char* key, JSON_entry* value) {
 
 // string
 
+static char* unescapeString(char* string) {
+}
+
 JSON_entry* JSON_newString(char* base) {
     JSON_entry* entry = malloc(sizeof(JSON_entry));
     entry->type = STRING;
@@ -322,14 +327,6 @@ JSON_entry** JSON_deepWaccess(JSON_entry* entry, char* accessString) {
 
 static char* skipArray(char*);
 static char* skipObject(char*); // forward declarations
-
-static char* skipWhiteSpace(char* start) {
-    if (start == NULL) {
-        return NULL;
-    }
-    while(isspace(*start)) start++;
-    return start;
-}
 
 static char* skipToComma(char* start) {
     if (start == NULL) {
@@ -488,7 +485,6 @@ static char* arrayNext(char* current, JSON_textEntry* state) {
     }
     current = skipToComma(current);
     if (current) current++;
-    current = skipWhiteSpace(current);
     if (current == NULL || *current == 0) { // `current == NULL` to escape early if `*current` will segfault
         return NULL;
     }
@@ -505,15 +501,31 @@ static char* objectNext(char* current, JSON_textEntry* state) {
     int nameLength = current - name - 1;
     current = skipToColon(current);
     if (current) current++;
-    current = skipWhiteSpace(current);
     current = arrayNext(current, state);
     state->name = name;
     state->nameLength = nameLength;
     return current;
 }
 
+static int stripWhitespace(char* string) {
+    int total = 0;
+    char* nextEmpty = string;
+    char* head;
+    for(; !isspace(*nextEmpty); nextEmpty++) if (*nextEmpty == 0) break;
+    for(head = nextEmpty; *head != 0; head++) {
+        if (isspace(*head)) continue;
+        total++;
+        *nextEmpty = *head;
+        nextEmpty++;
+    }
+    *nextEmpty = 0;
+    return total;
+}
+
 JSON_entry* JSON_fromString(char* string) {
     JSON_textEntry* entry = malloc(sizeof(JSON_textEntry));
+    string = strdup(string); // we need to write to it
+    stripWhitespace(string);
     string = arrayNext(string, entry);
     JSON_entry* returnVal;
     char* nullTerminated = strndup(entry->firstChar, entry->length);
@@ -568,6 +580,23 @@ JSON_entry* JSON_fromString(char* string) {
             break;
     }
     free(original);
+    free(string);
+    return returnVal;
+}
+
+JSON_entry* JSON_fromFile(char* filename) {
+    int fd = open(filename, O_RDONLY);
+    if (fd == -1) {
+        perror("JSON_fromFile");
+        return NULL;
+    }
+    size_t size;
+    ioctl(fd, FIONREAD, &size);
+    char* buffer = malloc(size + 1);
+    read(fd, buffer, size);
+    buffer[size] = 0;
+    JSON_entry* returnVal = JSON_fromString(buffer);
+    free(buffer);
     return returnVal;
 }
 
@@ -576,7 +605,7 @@ void JSON_perror(void) {
 }
 
 int main(void) {
-char* test = "{\"metadata\":{\"version\":1.2,\"authors\":[\"Alice\",\"Bob\"],\"license\":null},\"config\":{\"features\":{\"enabled\":[\"feature1\",\"feature2\",\"feature3\"],\"disabled\":[],\"experimental\":{\"flag\":true,\"options\":[{\"name\":\"option1\",\"value\":42},{\"name\":\"option2\",\"value\":-3.14e-2}]}},\"thresholds\":{\"min\":0,\"max\":100,\"default\":50}},\"records\":[{\"id\":\"a1b2c3\",\"tags\":[\"tag1\",\"tag2\",\"tag3\"],\"nested\":{\"array\":[[1,2],[3,4],[5,6]],\"empty\":{}}},{\"id\":\"x9y8z7\",\"tags\":[],\"nested\":{\"array\":[],\"empty\":{}}}],\"special\":{\"unicode\":\"\\u1F600\",\"escapeTest\":\"This is a backslash: \\\\\"},\"hugeArray\":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19],\"deeplyNested\":{\"level1\":{\"level2\":{\"level3\":{\"level4\":{\"level5\":{\"key\":\"value\"}}}}}},\"randomValues\":[null,true,false,\"string\",123,45.67,-0.89e+3]}";
-    JSON_entry* result = JSON_fromString(test);
-    JSON_write(stdout, result, 1);
+    JSON_entry* results = JSON_fromFile("test.json");
+    JSON_write(stdout, results, 1);
+    JSON_free(results, true);
 }
