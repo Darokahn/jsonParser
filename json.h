@@ -1,5 +1,5 @@
-#ifndef JSON_TYPES_H
-#define JSON_TYPES_H
+#ifndef JSON_H
+#define JSON_H
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -33,7 +33,8 @@ enum JSON_TYPE {
     OBJECT,
     ARRAY,
     BOOL,
-    NULLTYPE
+    NULLTYPE,
+    NONVAL
 };
 
 typedef union {
@@ -51,21 +52,25 @@ struct JSON_entry {
     int referenceCount;
 };
 
-struct JSON_repo {
-    JSON_entry* trackedItems;
-};
-
 typedef enum {
     NONE,
     ACCESSNONOBJ,
     INDEXNONARR,
     UPDATENONOBJ,
     APPENDNONARR,
-    INDEXOUTOFBOUNDS
+    INDEXOUTOFBOUNDS,
+    CATNONSTRING
 } JSON_ERROR_ENUM;
 
 JSON_ERROR_ENUM JSON_ERROR = NONE;
 
+typedef struct {
+    char* name;
+    int nameLength;
+    enum JSON_TYPE type;
+    char* firstChar;
+    int length;
+} JSON_textEntry;
 
 JSON_entry* JSON_fromString(char* string);
 
@@ -81,11 +86,13 @@ JSON_entry* JSON_toString(JSON_entry* entry);
 
 JSON_entry* JSON_deepAccess(JSON_entry* entry, char* accessString); // parses a string formatted like `["key"][index]...` and returns the value indicated.
 
-JSON_entry* JSON_deepWaccess(JSON_entry* entry, char* accessString); // deep access version of `waccess`
+JSON_entry** JSON_deepWaccess(JSON_entry* entry, char* accessString); // deep access version of `waccess`
 
 JSON_entry* JSON_append(JSON_entry* entry, JSON_entry* item);
 
 JSON_entry* JSON_update(JSON_entry* entry, char* key, JSON_entry* value); // add a new key-value pair to an object or update an existing one
+
+void JSON_strCat(JSON_entry* entry, char* newStr); // dynamically concatenates the new string onto the entry.
 
 void JSON_perror(void); // print custom messages based on the value held in `JSON_ERROR_ENUM JSON_ERROR`
 
@@ -93,10 +100,9 @@ JSON_entry* JSON_newObj(void);
 JSON_entry* JSON_newArray(void);
 JSON_entry* JSON_newString(char* base);
 
-struct JSON_repo newRepo(void); // create a reference tracking repository
-void commit(struct JSON_repo* repo, JSON_entry* item); // commit a JSON_entry* to be tracked for garbage collection
-int audit(struct JSON_repo* repo); // update the repo and make sure reference counts are accurate
-int JSON_free(JSON_entry* entry); // recursively free a JSON object if its reference count is <= 1
+int JSON_free(JSON_entry* entry, bool base); // recursively free a JSON object
+
+JSON_entry* JSON_deepClone(JSON_entry* entry);
 
 JSON_entry JSON_NULLVAL = {
     .type = NULLTYPE,
