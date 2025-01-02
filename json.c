@@ -9,8 +9,7 @@
  * THIS IS CURRENTLY MARK 0
  * it is a naive little baby program. It believes anything you give it to parse is valid JSON.
  * if you give it invalid JSON, the little baby will segfault.
- * it also seems to fail with complicated stuff. I think most of what I have to do is go through and use my `skip` functions more thoughtfully,
- * with more handling for when they return NULL.
+ * it currently fails when given an empty array or object.
  *
  * current limitations:
  * * parser doesn't handle scientific notation numbers (should be easy)
@@ -348,8 +347,12 @@ static char* skipToColon(char* start) {
     return NULL;
 }
 
+static bool isFloatChar(char c) {
+    return isdigit(c) || c == '.' || c == 'e' || c == '-';
+}
+
 static char* skipNumber(char* start) {
-    while (isdigit(*start) || *start == '.') start++;
+    while (isFloatChar(*start)) start++;
     return start;
 }
 
@@ -468,7 +471,7 @@ static char* arrayNext(char* current, JSON_textEntry* state) {
             state->length = current - state->firstChar;
             break;
         default:
-            if (isdigit(*current) || *current == '-') {
+            if (isFloatChar(*current)) {
                 state->type = NUMBER;
                 state->firstChar = current;
                 current = skipNumber(current);
@@ -526,7 +529,11 @@ JSON_entry* JSON_fromString(char* string) {
                 if (entry->type == NONVAL) {
                     break;
                 }
-                JSON_update(returnVal, strndup(entry->name, entry->nameLength), JSON_fromString(strndup(entry->firstChar, entry->length)));
+                char* key = strndup(entry->name, entry->nameLength);
+                char* objValue = strndup(entry->firstChar, entry->length);
+                JSON_update(returnVal, key, JSON_fromString(objValue));
+                free(key);
+                free(objValue);
             } while (nullTerminated != NULL);
             break;
         case ARRAY:
@@ -538,7 +545,9 @@ JSON_entry* JSON_fromString(char* string) {
                 if (entry->type == NONVAL) {
                     break;
                 }
-                JSON_append(returnVal, JSON_fromString(strndup(entry->firstChar, entry->length)));
+                char* appendValue = strndup(entry->firstChar, entry->length);
+                JSON_append(returnVal, JSON_fromString(appendValue));
+                free(appendValue);
             } while (nullTerminated != NULL);
             break;
         case BOOL:
@@ -559,8 +568,8 @@ void JSON_perror(void) {
 }
 
 int main(void) {
-    char* test = "{\"name\":\"John\",\"age\":30,\"isEmployed\":true,\"address\":{\"street\":\"123 Main St\",\"city\":\"Anytown\",\"zipcode\":\"12345\"},\"phoneNumbers\":[{\"type\":\"home\",\"number\":\"555-1234\"},{\"type\":\"work\",\"number\":\"555-5678\"}],\"children\":[{\"name\":\"Alice\",\"age\":5},{\"name\":\"Bob\",\"age\":8}],\"spouse\":null}";
-   // char* test = "{\"string\":\"example\",\"number\":123.456,\"object\":{\"key\":\"value\"},\"array\":[1,true,null],\"boolean\":false,\"nullValue\":null}";
+    char* test = "{\"menu\":{\"id\":\"file\",\"value\":\"File\",\"popup\":{\"menuitem\":[{\"value\":\"New\",\"onclick\":\"CreateNewDoc()\"},{\"value\":\"Open\",\"onclick\":\"OpenDoc()\"},{\"value\":\"Close\",\"onclick\":\"CloseDoc()\"}]}},\"data\":{\"array\":[1,2,3,4],\"nested\":{\"key1\":true,\"key2\":null,\"key3\":{\"subkey\":\"value\",\"subarray\":[{\"id\":1,\"name\":\"Alice\"},{\"id\":2,\"name\":\"Bob\"}]}},\"emptyObject\":{\"test\": 1},\"emptyArray\":[1]},\"numbers\":{\"int\":123,\"float\":123.456,\"scientific\":1e10,\"negative\":-42},\"bools\":[true,false,true],\"string\":\"This is a test string with \\\"escaped quotes\\\" and a unicode character: \\u2603\"}";
+    //char* test = "{\"string\":\"example\",\"number\":123.456,\"object\":{\"key\":\"value\"},\"array\":[1,true,null],\"boolean\":false,\"nullValue\":null}";
     JSON_entry* result = JSON_fromString(test);
     JSON_write(stdout, result, 1);
 }
