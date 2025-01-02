@@ -9,10 +9,8 @@
  * THIS IS CURRENTLY MARK 0
  * it is a naive little baby program. It believes anything you give it to parse is valid JSON.
  * if you give it invalid JSON, the little baby will segfault.
- * it currently fails when given an empty object.
  *
  * current limitations:
- * * parser doesn't handle scientific notation numbers (should be easy)
  * * parser doesn't convert escaped sequences in strings to their literal byte values
  * * fails unpredictably if invalid json is passed
  * * a few important functions have not been written (JSON_remove, JSON_deepAccess, JSON_deepWaccess, JSON_perror)
@@ -334,6 +332,9 @@ static char* skipWhiteSpace(char* start) {
 }
 
 static char* skipToComma(char* start) {
+    if (start == NULL) {
+        return NULL;
+    }
     for (; *start != 0; start++) {
         if (*start == ',') return start;
     }
@@ -341,6 +342,9 @@ static char* skipToComma(char* start) {
 }
 
 static char* skipToColon(char* start) {
+    if (start == NULL) {
+        return NULL;
+    }
     for (; *start != 0; start++) {
         if (*start == ':') return start;
     }
@@ -492,6 +496,10 @@ static char* arrayNext(char* current, JSON_textEntry* state) {
 }
 
 static char* objectNext(char* current, JSON_textEntry* state) {
+    if (*current == 0) {
+        state->type = NONVAL;
+        return NULL;
+    }
     char* name = current + 1;
     current = skipString(current);
     int nameLength = current - name - 1;
@@ -568,8 +576,7 @@ void JSON_perror(void) {
 }
 
 int main(void) {
-    char* test = "{\"menu\":{\"id\":\"file\",\"value\":\"File\",\"popup\":{\"menuitem\":[{\"value\":\"New\",\"onclick\":\"CreateNewDoc()\"},{\"value\":\"Open\",\"onclick\":\"OpenDoc()\"},{\"value\":\"Close\",\"onclick\":\"CloseDoc()\"}]}},\"data\":{\"array\":[1,2,3,4],\"nested\":{\"key1\":true,\"key2\":null,\"key3\":{\"subkey\":\"value\",\"subarray\":[{\"id\":1,\"name\":\"Alice\"},{\"id\":2,\"name\":\"Bob\"}]}},\"emptyObject\":{\"test\": 1},\"emptyArray\":[]},\"numbers\":{\"int\":123,\"float\":123.456,\"scientific\":1e10,\"negative\":-42},\"bools\":[true,false,true],\"string\":\"This is a test string with \\\"escaped quotes\\\" and a unicode character: \\u2603\"}";
-    //char* test = "{\"string\":\"example\",\"number\":123.456,\"object\":{\"key\":\"value\"},\"array\":[1,true,null],\"boolean\":false,\"nullValue\":null}";
+char* test = "{\"metadata\":{\"version\":1.2,\"authors\":[\"Alice\",\"Bob\"],\"license\":null},\"config\":{\"features\":{\"enabled\":[\"feature1\",\"feature2\",\"feature3\"],\"disabled\":[],\"experimental\":{\"flag\":true,\"options\":[{\"name\":\"option1\",\"value\":42},{\"name\":\"option2\",\"value\":-3.14e-2}]}},\"thresholds\":{\"min\":0,\"max\":100,\"default\":50}},\"records\":[{\"id\":\"a1b2c3\",\"tags\":[\"tag1\",\"tag2\",\"tag3\"],\"nested\":{\"array\":[[1,2],[3,4],[5,6]],\"empty\":{}}},{\"id\":\"x9y8z7\",\"tags\":[],\"nested\":{\"array\":[],\"empty\":{}}}],\"special\":{\"unicode\":\"\\u1F600\",\"escapeTest\":\"This is a backslash: \\\\\"},\"hugeArray\":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19],\"deeplyNested\":{\"level1\":{\"level2\":{\"level3\":{\"level4\":{\"level5\":{\"key\":\"value\"}}}}}},\"randomValues\":[null,true,false,\"string\",123,45.67,-0.89e+3]}";
     JSON_entry* result = JSON_fromString(test);
     JSON_write(stdout, result, 1);
 }
