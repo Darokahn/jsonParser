@@ -14,7 +14,7 @@
  *
  * current limitations:
  * * parser doesn't convert escaped sequences in strings to their literal byte values
- * * fails unpredictably if invalid json is passed
+ * * fails unpredictably if invalid json is passed (almost always segfault)
  * * a few important functions have not been written (JSON_remove, JSON_deepAccess, JSON_deepWaccess, JSON_perror)
 */
 
@@ -533,7 +533,7 @@ static int stripWhitespace(char* string) {
 static JSON_entry* _JSON_fromString(char* string, bool base) {
     JSON_textEntry* entry = malloc(sizeof(JSON_textEntry));
     if (base) {
-        string = strdup(string); // we need to write to it
+        string = strdup(string); // to ensure writability, but only at the top level
         stripWhitespace(string);
     }
     string = arrayNext(string, entry);
@@ -619,7 +619,7 @@ void JSON_perror(void) {
 }
 
 int main(void) {
-    JSON_entry* results = JSON_fromFile("crashes.json");
+    JSON_entry* results = JSON_fromFile("test1.json");
     JSON_write(stdout, results, 1);
     JSON_free(results, true);
 }

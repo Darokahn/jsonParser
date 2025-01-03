@@ -102,7 +102,7 @@ JSON_entry* JSON_newString(char* base);
 
 void JSON_free(JSON_entry* entry, bool base); // recursively free a JSON object
 
-JSON_entry* JSON_deepClone(JSON_entry* entry);
+JSON_entry* JSON_deepCopy(JSON_entry* entry);
 
 JSON_entry JSON_NULLVAL = {
     .type = NULLTYPE,
