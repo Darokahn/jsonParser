@@ -100,7 +100,7 @@ JSON_entry* JSON_newObj(void);
 JSON_entry* JSON_newArray(void);
 JSON_entry* JSON_newString(char* base);
 
-int JSON_free(JSON_entry* entry, bool base); // recursively free a JSON object
+void JSON_free(JSON_entry* entry, bool base); // recursively free a JSON object
 
 JSON_entry* JSON_deepClone(JSON_entry* entry);
 

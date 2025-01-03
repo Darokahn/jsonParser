@@ -283,7 +283,7 @@ void JSON_write(FILE* buffer, JSON_entry* entry, int indent) {
     }
 }
 
-int JSON_free(JSON_entry* entry, bool base) {
+void JSON_free(JSON_entry* entry, bool base) {
     switch (entry->type) {
         case STRING:
             free(entry->data.string.str);
@@ -303,7 +303,7 @@ int JSON_free(JSON_entry* entry, bool base) {
         case BOOL:
             break;
         case NULLTYPE:
-            break;
+            return;
         default:
             break;
     }
@@ -619,7 +619,7 @@ void JSON_perror(void) {
 }
 
 int main(void) {
-    JSON_entry* results = JSON_fromFile("nocrash.json");
+    JSON_entry* results = JSON_fromFile("crashes.json");
     JSON_write(stdout, results, 1);
     JSON_free(results, true);
 }
