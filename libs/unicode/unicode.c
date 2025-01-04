@@ -41,4 +41,34 @@ char* UNICODE_fromCodePoint(int code) {
 }
 
 int UNICODE_toCodePoint(char* string) {
+    uint8_t leading;
+
+    int byteCount = 0;
+    for (leading = string[0]; (leading << byteCount) & 0x80; byteCount++);
+    if (byteCount == 0) byteCount = 1;
+
+    int leadingMask = UNICODE_INITIALS[byteCount - 1];
+    
+    int code = 0;
+    uint8_t c;
+    for (int i = 0; i < byteCount; i++) {
+        c = string[i];
+        if (i == 0) c ^= leadingMask;
+        else c ^= 0x80;
+        code += c << (6 * (byteCount - i - 1));
+    }
+    return code;
+}
+
+int main() {
+    char* a = UNICODE_fromCodePoint(0x41);
+    char* b = UNICODE_fromCodePoint(0xe9);
+    char* c = UNICODE_fromCodePoint(0x905);
+    char* d = UNICODE_fromCodePoint(0x1f600);
+
+    UNICODE_toCodePoint(a);
+    UNICODE_toCodePoint(b);
+    UNICODE_toCodePoint(c);
+    UNICODE_toCodePoint(d);
+    printf("%s %s %s %s\n", a, b, c, d);
 }

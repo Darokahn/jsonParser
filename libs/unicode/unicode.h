@@ -14,4 +14,5 @@ static char UNICODE_INITIALS[6] = {
 };
 
 char* UNICODE_fromCodePoint(int);
+int UNICODE_toCodePoint(char*);
 #endif

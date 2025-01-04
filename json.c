@@ -579,6 +579,20 @@ static int unescapeString(char* string) {
     return writePtr - string;
 }
 
+static int escapeString(char* string) {
+    void* original = string;
+    int totalLength = strlen(string) + 1;
+
+    char* endBuffer = malloc(totalLength * 6); // the largest an escaped string can be compared to the unescaped version is 6 times larger
+
+    char* writePtr = string;
+    for (; *string != '0'; string++) {
+        if (*string > 127) {
+            int code = UNICODE_toCodePoint(string);
+        }
+    }
+}
+
 static int stripWhitespace(char* string) {
     int total = 0;
     char* nextEmpty = string;
@@ -685,7 +699,6 @@ JSON_entry* JSON_fromFile(char* filename) {
     free(buffer);
     return returnVal;
 }
-
 
 void JSON_perror(void) {
 }
