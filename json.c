@@ -24,15 +24,15 @@ static int unescapeString(char*);
 // array
 
 const char jsonEscapes[128] = {
-    ['b'] = '\b',  // backspace
-    ['f'] = '\f',  // form feed
-    ['n'] = '\n',  // newline
-    ['r'] = '\r',  // carriage return
-    ['t'] = '\t',  // tab
-    ['"'] = '"',   // double quote
-    ['\\'] = '\\', // backslash
-    ['/'] = '/',   // forward slash (optional in JSON)
-    ['u'] = 'u'    // unicode escape
+    ['b'] = '\b',
+    ['f'] = '\f',
+    ['n'] = '\n',
+    ['r'] = '\r',
+    ['t'] = '\t',
+    ['"'] = '"',
+    ['\\'] = '\\',
+    ['/'] = '/',
+    ['u'] = 'u'
 };
 
 JSON_entry* JSON_newArray() {
@@ -522,7 +522,7 @@ static char* objectNext(char* current, JSON_textEntry* state) {
 }
 
 static int getCodePoint(char* template) {
-    // assumes `template` is aligned to the '\' in a unicode escape sequence (\u0041)
+    // assumes `template` is aligned to the 'u' in a unicode escape sequence (\u0041)
     long int codePoint;
     template++;
     codePoint = strtol(template, NULL, 16);
@@ -538,7 +538,7 @@ static int getCodePoint(char* template) {
 }
 
 static int decodeUnicode(char* template) {
-    // assumes `template` is aligned to the '\' in a unicode escape sequence (\u0041)
+    // assumes `template` is aligned to the 'u' in a unicode escape sequence (\u0041)
     int codePoint = getCodePoint(template);
     char* unicode = UNICODE_fromCodePoint(codePoint);
     int length = strlen(unicode);
@@ -550,6 +550,7 @@ static int decodeUnicode(char* template) {
 }
 
 static int decodeEscape(char* template) {
+    // assumes `template` is aligned to the indicating character in a unicode escape sequence (the `u` in \u0041)
     char val = jsonEscapes[template[0]];
     if (val == 'u') {
         return decodeUnicode(template);
