@@ -6,6 +6,7 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include "json.h"
+#include "libs/unicode/unicode.h"
 
 /*
  * THIS IS CURRENTLY MARK 0
@@ -13,12 +14,26 @@
  * if you give it invalid JSON, the little baby will segfault.
  *
  * current limitations:
- * * parser doesn't convert escaped sequences in strings to their literal byte values
+ * * parser doesn't convert unicode escape sequences
  * * fails unpredictably if invalid json is passed (almost always segfault)
  * * a few important functions have not been written (JSON_remove, JSON_deepAccess, JSON_deepWaccess, JSON_perror)
 */
 
+static int unescapeString(char*);
+
 // array
+
+const char jsonEscapes[128] = {
+    ['b'] = '\b',  // backspace
+    ['f'] = '\f',  // form feed
+    ['n'] = '\n',  // newline
+    ['r'] = '\r',  // carriage return
+    ['t'] = '\t',  // tab
+    ['"'] = '"',   // double quote
+    ['\\'] = '\\', // backslash
+    ['/'] = '/',   // forward slash (optional in JSON)
+    ['u'] = 'u'    // unicode escape
+};
 
 JSON_entry* JSON_newArray() {
     JSON_any arr;
@@ -178,14 +193,13 @@ JSON_entry* JSON_update(JSON_entry* entry, char* key, JSON_entry* value) {
 
 // string
 
-static char* unescapeString(char* string) {
-}
-
 JSON_entry* JSON_newString(char* base) {
     JSON_entry* entry = malloc(sizeof(JSON_entry));
     entry->type = STRING;
 
     entry->data.string.str = strdup(base);
+    int newCapacity = unescapeString(entry->data.string.str) + 1;
+    entry->data.string.str = realloc(entry->data.string.str, newCapacity);
     entry->data.string.length = strlen(base) + 1;
     entry->data.string.capacity = entry->data.string.length;
     return entry;
@@ -383,10 +397,10 @@ static char* skipString(char* start) {
         if (*start == '\\') {
             start += 2;
         }
-        if (*start == '\"') {
+        else if (*start == '\"') {
             break;
         }
-        if (*start == 0) {
+        else if (*start == 0) {
             return NULL;
         }
         start++;
@@ -507,6 +521,53 @@ static char* objectNext(char* current, JSON_textEntry* state) {
     return current;
 }
 
+static int getCodePoint(char* template) {
+    long int codePoint;
+    template++;
+    codePoint = strtol(template, NULL, 16);
+    return (int) codePoint;
+}
+
+static int decodeUnicode(char* template) {
+    int codePoint = getCodePoint(template);
+    char* unicode = UNICODE_fromCodePoint(codePoint);
+    int length = strlen(unicode);
+    int beginning = 6 - length;
+    strcpy(template + beginning, unicode);
+
+    free(unicode);
+    return beginning;
+}
+
+static int decodeEscape(char* template) {
+    char val = jsonEscapes[template[0]];
+    if (val == 'u') {
+        return decodeUnicode(template);
+    }
+    else {
+        template[0] = val;
+        return 1;
+    }
+}
+
+static int unescapeString(char* string) {
+    char* readPtr;
+    char* writePtr;
+    for (readPtr = string; *readPtr != '\\' && *readPtr != 0; readPtr++); // align readPtr to the first backslash
+    writePtr = readPtr;
+    while (*readPtr != 0) {
+        if (*readPtr == '\\') {
+            int length = decodeEscape(readPtr + 1);
+            readPtr += length;
+        }
+        *writePtr = *readPtr;
+        readPtr++;
+        writePtr++;
+    }
+    *writePtr = 0;
+    return writePtr - string;
+}
+
 static int stripWhitespace(char* string) {
     int total = 0;
     char* nextEmpty = string;
@@ -619,7 +680,6 @@ void JSON_perror(void) {
 }
 
 int main(void) {
-    JSON_entry* results = JSON_fromFile("test1.json");
-    JSON_write(stdout, results, 1);
-    JSON_free(results, true);
+    JSON_entry* result = JSON_fromFile("testEz.json");
+    printf("%s\n", JSON_access(result, "string")->data.string.str);
 }

@@ -1,0 +1,44 @@
+#include <stdint.h>
+#include <string.h>
+#include <stdio.h>
+#include "unicode.h"
+
+void printBytes(char* string) {
+    for (; *string != 0; string++) {
+        printf("%x ", (uint8_t)*string);
+    }
+    printf("\n");
+}
+
+char* UNICODE_fromCodePoint(int code) {
+    if (code > 0x10ffff) {
+        // utf-8 defines a 4-byte limit for unicode characters, but still defines behavior for up to 6-byte characters.
+        // this limit is arbitrary and can be changed if your application uses an expanded character encoding.
+        fprintf(stderr, "UNICODE_fromCodePoint: code out of range\n");
+        return NULL;
+    }
+    char* bytes = strndup(UNICODE_TEMPLATEBYTES, 6);
+    if (bytes == NULL) {
+        perror("UNICODE_fromCodePoint");
+        return bytes;
+    }
+
+    int* threshold;
+    for (threshold = UNICODE_THRESHOLDS; *threshold <= code; threshold++);
+
+    int byteCount = (threshold - UNICODE_THRESHOLDS) + 1;
+    bytes[0] = UNICODE_INITIALS[byteCount - 1];
+
+    int i;
+    char mask = 0x3f;
+
+    if (byteCount == 1) mask = 0xFF;
+    for (i = 0; i < byteCount; i++) {
+        bytes[i] |= (code >> (6 * (byteCount - i - 1))) & mask;
+    }
+    bytes[i] = '\0';
+    return bytes;
+}
+
+int UNICODE_toCodePoint(char* string) {
+}
