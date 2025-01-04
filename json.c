@@ -691,6 +691,6 @@ void JSON_perror(void) {
 }
 
 int main(void) {
-    JSON_entry* result = JSON_fromFile("testEz.json");
+    JSON_entry* result = JSON_fromFile("test.json");
     printf("%s\n", JSON_access(result, "string")->data.string.str);
 }
