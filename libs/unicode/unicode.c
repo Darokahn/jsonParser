@@ -59,16 +59,3 @@ int UNICODE_toCodePoint(char* string) {
     }
     return code;
 }
-
-int main() {
-    char* a = UNICODE_fromCodePoint(0x41);
-    char* b = UNICODE_fromCodePoint(0xe9);
-    char* c = UNICODE_fromCodePoint(0x905);
-    char* d = UNICODE_fromCodePoint(0x1f600);
-
-    UNICODE_toCodePoint(a);
-    UNICODE_toCodePoint(b);
-    UNICODE_toCodePoint(c);
-    UNICODE_toCodePoint(d);
-    printf("%s %s %s %s\n", a, b, c, d);
-}

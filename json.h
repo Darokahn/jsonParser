@@ -92,6 +92,10 @@ JSON_entry* JSON_append(JSON_entry* entry, JSON_entry* item);
 
 JSON_entry* JSON_update(JSON_entry* entry, char* key, JSON_entry* value); // add a new key-value pair to an object or update an existing one
 
+void JSON_remove(JSON_entry* entry, char* key);
+
+void JSON_pop(JSON_entry* entry, int index);
+
 void JSON_strCat(JSON_entry* entry, char* newStr); // dynamically concatenates the new string onto the entry.
 
 void JSON_perror(void); // print custom messages based on the value held in `JSON_ERROR_ENUM JSON_ERROR`

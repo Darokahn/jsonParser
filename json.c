@@ -14,16 +14,13 @@
  * if you give it invalid JSON, the little baby will segfault.
  *
  * current limitations:
- * * parser "un-escapes" characters in strings on read but doesn't convert them back on write
  * * fails unpredictably if invalid json is passed (almost always segfault)
  * * a few important functions have not been written (JSON_remove, JSON_deepAccess, JSON_deepWaccess, JSON_perror)
 */
 
 static int unescapeString(char*);
 
-// array
-
-const char jsonEscapes[128] = {
+static const char jsonEscapes[128] = {
     ['b'] = '\b',
     ['f'] = '\f',
     ['n'] = '\n',
@@ -34,6 +31,20 @@ const char jsonEscapes[128] = {
     ['/'] = '/',
     ['u'] = 'u'
 };
+
+static const char jsonEscapesReverse[128] = {
+    ['\b'] = 'b',
+    ['\f'] = 'f',
+    ['\n'] = 'n',
+    ['\r'] = 'r',
+    ['\t'] = 't',
+    ['\"'] = '"',
+    ['\\'] = '\\',
+    ['/'] = '/',
+    ['u'] = 'u'
+};
+
+// array
 
 JSON_entry* JSON_newArray() {
     JSON_any arr;
@@ -191,6 +202,12 @@ JSON_entry* JSON_update(JSON_entry* entry, char* key, JSON_entry* value) {
     }
 }
 
+void JSON_remove (JSON_entry* entry, char* key) {
+    int index = JSON_getKeyIndex(entry, key);
+    memmove(&entry->data.object.keys[index], &entry->data.object.keys[index + 1], entry->data.object.values->data.array.length - index);
+    JSON_pop(entry->data.object.values, index);
+}
+
 // string
 
 JSON_entry* JSON_newString(char* base) {
@@ -247,10 +264,35 @@ static void _indent(FILE* buffer, int indent) {
     }
 }
 
+int writeEscapeString(FILE* buffer, char* string) {
+    char* start = string;
+    while (true) {
+        for (; (unsigned char) *string > 0x1f && *string != 0x7f; string++);
+        fwrite(start, sizeof(char), string - start, buffer);
+        if (*string == '\0') break;
+        int code = UNICODE_toCodePoint(string);
+        char c = jsonEscapesReverse[*string];
+        if (c != 0) {
+            fprintf(buffer, "\\%c", c);
+        }
+        else {
+            fprintf(buffer, "\\u%04x", code);
+        }
+        string++;
+        start = string;
+    }
+    if (fflush(buffer) != 0) {
+        perror("writeEscapeString");
+        return -1;
+    }
+}
+
 void JSON_write(FILE* buffer, JSON_entry* entry, int indent) {
     switch (entry->type) {
         case STRING:
-            fprintf(buffer, "\"%s\"", entry->data.string.str);
+            fprintf(buffer, "\"");
+            writeEscapeString(buffer, entry->data.string.str);
+            fprintf(buffer, "\"");
             break;
         case NUMBER:
             fprintf(buffer, "%g", entry->data.number);
@@ -260,7 +302,7 @@ void JSON_write(FILE* buffer, JSON_entry* entry, int indent) {
             for (int i = 0; i < entry->data.object.values->data.array.length; i++) {
                 _indent(buffer, indent);
                 fprintf(buffer, "\"");
-                fprintf(buffer, "%s", entry->data.object.keys[i]);
+                writeEscapeString(buffer, entry->data.object.keys[i]);
                 fprintf(buffer, "\": ");
                 JSON_write(buffer, entry->data.object.values->data.array.items[i], indent + 1);
                 if (i != entry->data.object.values->data.array.length - 1) {
@@ -579,18 +621,35 @@ static int unescapeString(char* string) {
     return writePtr - string;
 }
 
-static int escapeString(char* string) {
+static char* escapeString(char* string) {
     void* original = string;
     int totalLength = strlen(string) + 1;
 
     char* endBuffer = malloc(totalLength * 6); // the largest an escaped string can be compared to the unescaped version is 6 times larger
+    if (endBuffer == NULL) {
+        perror("escapeString");
+        return NULL;
+    }
 
-    char* writePtr = string;
-    for (; *string != '0'; string++) {
-        if (*string > 127) {
+    char* writePtr = endBuffer;
+    for (; *string != '\0'; string++) {
+        bool printable = (*string > 0x1f && *string != 0x7f);
+        if (!printable) {
             int code = UNICODE_toCodePoint(string);
+            (*writePtr = '\\', writePtr++);
+            char escape = jsonEscapesReverse[*string];
+            if (escape != 0) (*writePtr = escape, writePtr++);
+            else writePtr += sprintf(writePtr, "%04x", code);
+        }
+        else {
+            *writePtr = *string;
+            writePtr++;
         }
     }
+    *writePtr = 0;
+    printf("%s\n", endBuffer);
+    endBuffer = realloc(endBuffer, writePtr - endBuffer + 1);
+    return endBuffer;
 }
 
 static int stripWhitespace(char* string) {
@@ -705,5 +764,6 @@ void JSON_perror(void) {
 
 int main(void) {
     JSON_entry* result = JSON_fromFile("test.json");
-    printf("%s\n", JSON_access(result, "string")->data.string.str);
+    JSON_remove(result, "string");
+    JSON_write(stdout, result, 1);
 }
