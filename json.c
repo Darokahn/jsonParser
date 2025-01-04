@@ -14,7 +14,7 @@
  * if you give it invalid JSON, the little baby will segfault.
  *
  * current limitations:
- * * parser doesn't convert unicode escape sequences
+ * * parser "un-escapes" characters in strings on read but doesn't convert them back on write
  * * fails unpredictably if invalid json is passed (almost always segfault)
  * * a few important functions have not been written (JSON_remove, JSON_deepAccess, JSON_deepWaccess, JSON_perror)
 */
@@ -522,21 +522,31 @@ static char* objectNext(char* current, JSON_textEntry* state) {
 }
 
 static int getCodePoint(char* template) {
+    // assumes `template` is aligned to the '\' in a unicode escape sequence (\u0041)
     long int codePoint;
     template++;
     codePoint = strtol(template, NULL, 16);
+    if (codePoint >= 0xd800 && codePoint <= 0xdbff) {
+        int extended = strtol(template + 6, NULL, 16);
+        codePoint -= 0xd800;
+        extended -= 0xdc00;
+        codePoint <<= 10;
+        codePoint |= extended;
+        codePoint += 0x10000;
+    }
     return (int) codePoint;
 }
 
 static int decodeUnicode(char* template) {
+    // assumes `template` is aligned to the '\' in a unicode escape sequence (\u0041)
     int codePoint = getCodePoint(template);
     char* unicode = UNICODE_fromCodePoint(codePoint);
     int length = strlen(unicode);
-    int beginning = 6 - length;
+    int beginning = 5 - length;
     strcpy(template + beginning, unicode);
 
     free(unicode);
-    return beginning;
+    return beginning + 1;
 }
 
 static int decodeEscape(char* template) {
