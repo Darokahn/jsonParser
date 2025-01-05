@@ -1,4 +1,39 @@
 {
-    "string": "hello world :)  \uD83D\uDE01"
+  "id": 5380,
+  "uid": "1f4a090a-4840-4820-bd8d-c87558367a00",
+  "password": "gHPVC45Xyb",
+  "first_name": "Tangela",
+  "last_name": "Sawayn",
+  "username": "tangela.sawayn",
+  "email": "tangela.sawayn@email.com",
+  "avatar": "https://robohash.org/abmolestiaererum.png?size=300x300&set=set1",
+  "gender": "Polygender",
+  "phone_number": "+56 448.056.5483",
+  "social_insurance_number": "923557839",
+  "date_of_birth": "1992-02-28",
+  "employment": {
+    "title": "Lead Banking Executive",
+    "key_skill": "Fast learner"
+  },
+  "address": {
+    "city": "Mildredhaven",
+    "street_name": "Reilly Forge",
+    "street_address": "347 Davis Wall",
+    "zip_code": "31271-2370",
+    "state": "Rhode Island",
+    "country": "United States",
+    "coordinates": {
+      "lat": 12.307474535180035,
+      "lng": -47.91107667080351
+    }
+  },
+  "credit_card": {
+    "cc_number": "4530936999806"
+  },
+  "subscription": {
+    "plan": "Gold",
+    "status": "Pending",
+    "payment_method": "Credit card",
+    "term": "Payment in advance"
+  }
 }
-

@@ -9,13 +9,6 @@
 #include "libs/unicode/unicode.h"
 
 /*
- * THIS IS CURRENTLY MARK 0
- * it is a naive little baby program. It believes anything you give it to parse is valid JSON.
- * if you give it invalid JSON, the little baby will segfault.
- *
- * current limitations:
- * * fails unpredictably if invalid json is passed (almost always segfault)
- * * a few important functions have not been written (JSON_remove, JSON_deepAccess, JSON_deepWaccess, JSON_perror)
 */
 
 static int unescapeString(char*);
@@ -256,7 +249,7 @@ JSON_entry* JSON_newBool(bool value) {
     return entry;
 }
 
-// generic
+// write JSON
 
 static void _indent(FILE* buffer, int indent) {
     for (int i = 0; i < indent; i++) {
@@ -339,6 +332,8 @@ void JSON_write(FILE* buffer, JSON_entry* entry, int indent) {
     }
 }
 
+// free
+
 void JSON_free(JSON_entry* entry, bool base) {
     switch (entry->type) {
         case STRING:
@@ -379,6 +374,14 @@ JSON_entry* JSON_deepAccess(JSON_entry* entry, char* accessString) {
 JSON_entry** JSON_deepWaccess(JSON_entry* entry, char* accessString) {
 }
 
+// parsing error handler
+
+void reject(JSON_ERROR_ENUM error) {
+    JSON_ERROR = error;
+    JSON_perror();
+}
+
+// object text traversal
 // all skip methods assume you have properly aligned `start` to the beginning of a value.
 
 static char* skipArray(char*);
@@ -422,6 +425,7 @@ static char* skipBool(char* start) {
     else if (strncmp(start, falseText, sizeof(falseText) - 1) == 0) {
         start += sizeof(falseText) - 1;
     }
+    else return NULL;
     return start;
 }
 
@@ -430,6 +434,7 @@ char* skipNull(char* start) {
     if (strncmp(start, nullText, sizeof(nullText) - 1) == 0) {
         start += sizeof(nullText) - 1;
     }
+    else return NULL;
     return start;
 }
 
@@ -455,7 +460,7 @@ static char* skipArray(char* start) {
     int open = 0;
     for (; *start != 0; start++) {
         if (*start == '\"') {
-            start = skipString(start);
+            start = skipString(start) - 1;
         }
         if (*start == '[') {
             open++;
@@ -475,7 +480,7 @@ static char* skipObject(char* start) {
     int open = 0;
     for (; *start != 0; start++) {
         if (*start == '\"') {
-            start = skipString(start);
+            start = skipString(start) - 1;
         }
         if (*start == '{') {
             open++;
@@ -492,26 +497,43 @@ static char* skipObject(char* start) {
 }
 
 static char* arrayNext(char* current, JSON_textEntry* state) {
+    // returns pointer to the next entry, unless there is an error in the source string, in which case it returns NULL
+    // determine that it has found the last entry by comparing *return to '\0'.
+    char* original = current;
     state->name = NULL; // unused field when getting inside an array
     state->nameLength = -1;
-    while (isspace(*current)) current++;
     switch (*current) {
         case '\"':
             state->type = STRING;
             state->firstChar = current;
             current = skipString(current);
+            if (current == NULL) {
+                reject(UNMATCHEDQUOTE);
+                state->type = NONVAL;
+                return NULL;
+            }
             state->length = current - state->firstChar;
             break;
         case '[':
             state->type = ARRAY;
             state->firstChar = current;
             current = skipArray(current);
+            if (current == NULL) {
+                reject(UNMATCHEDBRACKET);
+                state->type = NONVAL;
+                return NULL;
+            }
             state->length = current - state->firstChar;
             break;
         case '{':
             state->type = OBJECT;
             state->firstChar = current;
             current = skipObject(current);
+            if (current == NULL) {
+                reject(UNMATCHEDBRACE);
+                state->type = NONVAL;
+                return NULL;
+            }
             state->length = current - state->firstChar;
             break;
         case 't':
@@ -519,12 +541,22 @@ static char* arrayNext(char* current, JSON_textEntry* state) {
             state->type = BOOL;
             state->firstChar = current;
             current = skipBool(current);
+            if (current == NULL) {
+                reject(INVALIDBOOL);
+                state->type = NONVAL;
+                return NULL;
+            }
             state->length = current - state->firstChar;
             break;
         case 'n':
             state->type = NULLTYPE;
             state->firstChar = current;
             current = skipNull(current);
+            if (current == NULL) {
+                reject(INVALIDNULL);
+                state->type = NONVAL;
+                return NULL;
+            }
             state->length = current - state->firstChar;
             break;
         default:
@@ -532,18 +564,29 @@ static char* arrayNext(char* current, JSON_textEntry* state) {
                 state->type = NUMBER;
                 state->firstChar = current;
                 current = skipNumber(current);
+                if (current == NULL) {
+                    reject(INVALIDNUMBER);
+                    state->type = NONVAL;
+                    return NULL;
+                }
                 state->length = current - state->firstChar;
                 break;
             }
             else {
+                reject(INVALIDVAL);
                 state->type = NONVAL;
+                return NULL;
             }
     }
-    current = skipToComma(current);
-    if (current) current++;
-    if (current == NULL || *current == 0) { // `current == NULL` to escape early if `*current` will segfault
-        return NULL;
+    // all cases, if successful, should leave `current` pointing to either a comma or the null terminator of a string.
+    if (*current != ',') {
+        if (*current != '\0') {
+            reject(EXPECTEDCOMMA);
+            state->type = NONVAL;
+            return NULL;
+        }
     }
+    current++; // skip comma
     return current;
 }
 
@@ -554,10 +597,22 @@ static char* objectNext(char* current, JSON_textEntry* state) {
     }
     char* name = current + 1;
     current = skipString(current);
+    if (current == NULL) {
+        reject(UNMATCHEDQUOTE);
+        state->type = NONVAL;
+        return NULL;
+    }
     int nameLength = current - name - 1;
-    current = skipToColon(current);
+    if (*current != ':') {
+        reject(EXPECTEDCOLON);
+        state->type = NONVAL;
+        return NULL;
+    }
     if (current) current++;
     current = arrayNext(current, state);
+    if (current == NULL) {
+        return NULL;
+    }
     state->name = name;
     state->nameLength = nameLength;
     return current;
@@ -653,7 +708,6 @@ static char* escapeString(char* string) {
 }
 
 static int stripWhitespace(char* string) {
-    int total = 0;
     char* nextEmpty = string;
     char* head;
     for(; !isspace(*nextEmpty); nextEmpty++) if (*nextEmpty == 0) break;
@@ -662,33 +716,51 @@ static int stripWhitespace(char* string) {
         if (*head == '\"') {
             char* temp = head;
             head = skipString(head);
+            if (head == NULL) {
+                reject(UNMATCHEDQUOTE); 
+                return -1;
+            }
             for (; temp < head; temp++) {
                 *nextEmpty = *temp;
                 nextEmpty++;
             }
         }
-        total++;
+        if (isspace(*head)) continue;
         *nextEmpty = *head;
         nextEmpty++;
     }
     *nextEmpty = 0;
-    return total;
+    return nextEmpty - string;
 }
 
 static JSON_entry* _JSON_fromString(char* string, bool base) {
-    JSON_textEntry* entry = malloc(sizeof(JSON_textEntry));
+    if (strncmp(string, "\"Payment", 8) == 0) {
+        printf("okay\n");
+    }
+    JSON_textEntry e;
+    JSON_textEntry* entry = &e;
+    char* originalString;
     if (base) {
         string = strdup(string); // to ensure writability, but only at the top level
-        stripWhitespace(string);
+        originalString = string;
+        if (stripWhitespace(string) == -1) {
+            free(originalString);
+            return NULL;
+        }
     }
     string = arrayNext(string, entry);
+    if (string == NULL) {
+        return NULL;
+    }
     JSON_entry* returnVal;
     char* nullTerminated = strndup(entry->firstChar, entry->length);
     int nullTerminatedLength = entry->length;
-    char* original = nullTerminated;
+    char* originalNT = nullTerminated;
     switch (entry->type) {
         case NUMBER:
-            returnVal = JSON_newNumber(atof(nullTerminated));
+            double floatValue;
+            floatValue = strtod(entry->firstChar, &entry->firstChar);
+            returnVal = JSON_newNumber(floatValue);
             break;
         case STRING:
             nullTerminated[nullTerminatedLength - 1] = 0;
@@ -696,12 +768,15 @@ static JSON_entry* _JSON_fromString(char* string, bool base) {
             returnVal = JSON_newString(nullTerminated);
             break;
         case OBJECT:
+            // object does not need to be validated
             nullTerminated[nullTerminatedLength - 1] = 0;
             nullTerminated++;
             returnVal = JSON_newObj();
             do {
                 nullTerminated = objectNext(nullTerminated, entry);
-                if (entry->type == NONVAL) {
+                if (nullTerminated == NULL) {
+                    free(returnVal);
+                    returnVal = NULL;
                     break;
                 }
                 char* key = strndup(entry->name, entry->nameLength);
@@ -709,21 +784,24 @@ static JSON_entry* _JSON_fromString(char* string, bool base) {
                 JSON_update(returnVal, key, _JSON_fromString(objValue, false));
                 free(key);
                 free(objValue);
-            } while (nullTerminated != NULL);
+            } while (*nullTerminated != '\0');
             break;
         case ARRAY:
+            // array does not need to be validated
             nullTerminated[nullTerminatedLength - 1] = 0;
             nullTerminated++;
             returnVal = JSON_newArray();
             do {
                 nullTerminated = arrayNext(nullTerminated, entry);
-                if (entry->type == NONVAL) {
+                if (nullTerminated == NULL) {
+                    free(returnVal);
+                    returnVal = NULL;
                     break;
                 }
                 char* appendValue = strndup(entry->firstChar, entry->length);
                 JSON_append(returnVal, _JSON_fromString(appendValue, false));
                 free(appendValue);
-            } while (nullTerminated != NULL);
+            } while (*nullTerminated != '\0');
             break;
         case BOOL:
             returnVal = JSON_newBool(strcmp(nullTerminated, "true") == 0);
@@ -732,10 +810,10 @@ static JSON_entry* _JSON_fromString(char* string, bool base) {
             returnVal = &JSON_NULLVAL;
             break;
         default:
-            break;
+            reject(PANIC);
     }
-    free(original);
-    if (base) free(string);
+    free(originalNT);
+    if (base) free(originalString);
     return returnVal;
 }
 
@@ -760,10 +838,39 @@ JSON_entry* JSON_fromFile(char* filename) {
 }
 
 void JSON_perror(void) {
+    char* errors[] = {
+        "Success",
+        "Attempt to access non-object using JSON_access",
+        "Attempt to index non-array using JSON_index",
+        "Attempt to update non-object using JSON_update",
+        "Attempt to append to non-array using JSON_append",
+        "Index out of bounds",
+        "Attempt to catenate to non-string using JSON_strCat",
+
+        "Unmatched ' \" '",
+        "Unmatched ' [ '",
+        "Unmatched ' { ' ",
+        "Number invalid",
+        "Value invalid",
+        "Value invalid",
+        "Value invalid",
+        "Value invalid",
+        "Expected ' , '",
+        "Expected ' : '",
+        "Something unexpected went wrong. Have fun"
+    };
+
+    if (JSON_ERROR > 6) {
+        fprintf(stderr, "Parse failed: ");
+    }
+
+    fprintf(stderr, "%s\n", errors[JSON_ERROR]);
 }
 
 int main(void) {
     JSON_entry* result = JSON_fromFile("test.json");
-    JSON_remove(result, "string");
+    if (result == NULL) {
+        return -1;
+    }
     JSON_write(stdout, result, 1);
 }
