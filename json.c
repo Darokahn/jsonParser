@@ -9,6 +9,10 @@
 #include "libs/unicode/unicode.h"
 
 /*
+ * to do:
+ * - deepAccess
+ * - deepWaccess
+ * - deepCopy
 */
 
 static int unescapeString(char*);
