@@ -5,17 +5,34 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include "json.h"
 #include "libs/unicode/unicode.h"
 
 /*
  * to do:
- * - deepAccess
- * - deepWaccess
  * - deepCopy
+ *
+ * There may seem to be inconsistencies with error handling and returns. However, bar mistakes,
+ * a consistent scheme is used:
+ * return NULL (if applicable) for error (such as an un-parseable string or if a malloc fails).
+ * return &JSON_NULLVAL (if applicable) when a json entry was expected but not found.
+ * use function `reject` if the error bars the function from being used in a pipeline (Indexing a non-array).
+ * set JSON_ERROR without `reject` if the function can't fulfill its usual purpose, but can still return a logical value
+ * * (Indexing an array out of bounds returns &JSON_NULLVAL).
 */
 
 static int unescapeString(char*);
+static int stripWhitespace(char*);
+static char* skipString(char*);
+
+enum FAILTYPE {
+    PARSE,
+    USAGE,
+    ACCESS_STRING
+};
+
+static void reject(enum FAILTYPE, JSON_ERROR_ENUM);
 
 static const char jsonEscapes[128] = {
     ['b'] = '\b',
@@ -65,7 +82,7 @@ JSON_entry* JSON_newArray() {
 
 JSON_entry* JSON_append(JSON_entry* entry, JSON_entry* item) {
     if (entry->type != ARRAY) {
-        JSON_ERROR = APPENDNONARR;
+        reject(USAGE, APPENDNONARR);
         return &JSON_NULLVAL;
     }
     JSON_Array* arr = &entry->data.array;
@@ -81,7 +98,7 @@ JSON_entry* JSON_append(JSON_entry* entry, JSON_entry* item) {
 
 void JSON_pop(JSON_entry* entry, int index) {
     if (entry->type != ARRAY) {
-        JSON_ERROR = APPENDNONARR;
+        reject(USAGE, INDEXNONARR);
         return;
     }
     JSON_entry** beginning = &(entry->data.array.items[index]);
@@ -94,10 +111,10 @@ void JSON_pop(JSON_entry* entry, int index) {
 
 JSON_entry* JSON_index(JSON_entry* entry, int index) {
     if (entry->type != ARRAY) {
-        JSON_ERROR = INDEXNONARR;
-        return &JSON_NULLVAL;
+        reject(USAGE, INDEXNONARR);
+        return NULL;
     }
-    if (index > entry->data.array.length || index < 0) {
+    if (index >= entry->data.array.length || index < 0) {
         JSON_ERROR = INDEXOUTOFBOUNDS;
         return &JSON_NULLVAL;
     }
@@ -113,7 +130,7 @@ JSON_entry** JSON_windex(JSON_entry* entry, int index) {
         JSON_ERROR = INDEXOUTOFBOUNDS;
         return NULL;
     }
-    JSON_free(entry->data.array.items[index], true);
+    JSON_free(entry->data.array.items[index]);
     return &(entry->data.array.items[index]);
 }
 
@@ -157,7 +174,7 @@ JSON_entry** JSON_waccess(JSON_entry* entry, char* key) {
             break;
         }
     }
-    JSON_free(entry->data.object.values->data.array.items[i], true);
+    JSON_free(entry->data.object.values->data.array.items[i]);
     return &(entry->data.object.values->data.array.items[i]);
 
 }
@@ -338,7 +355,7 @@ void JSON_write(FILE* buffer, JSON_entry* entry, int indent) {
 
 // free
 
-void JSON_free(JSON_entry* entry, bool base) {
+void JSON_free(JSON_entry* entry) {
     switch (entry->type) {
         case STRING:
             free(entry->data.string.str);
@@ -346,12 +363,12 @@ void JSON_free(JSON_entry* entry, bool base) {
         case NUMBER:
             break;
         case OBJECT:
-            JSON_free(entry->data.object.values, false);
+            JSON_free(entry->data.object.values);
             free(entry->data.object.keys);
             break;
         case ARRAY:
             for (int i = 0; i < entry->data.array.length; i++) {
-                JSON_free(entry->data.array.items[i], false);
+                JSON_free(entry->data.array.items[i]);
             }
             free(entry->data.array.items);
             break;
@@ -362,25 +379,118 @@ void JSON_free(JSON_entry* entry, bool base) {
         default:
             break;
     }
-    if (!base) {
-        free(entry);
+    free(entry);
+}
+
+struct accessEntry {
+    enum {INDEX, KEY} accessType;
+    union {
+        char* key;
+        int index;
+    } data;
+    int keyLength;
+};
+
+static char* accessStringNext(char* accessString, struct accessEntry* entry) {
+    if (*accessString == '[') {
+        entry->accessType = INDEX;
+        entry->data.index = strtol(accessString + 1, &accessString, 10);
+        entry->keyLength = -1; // unused for indices
+        if (*accessString != ']') {
+            reject(ACCESS_STRING, INVALIDNUMBER);
+            return NULL;
+        }
+        accessString++;
+    }
+    else if (*accessString == '.') {
+        entry->data.key = accessString + 1;
+        entry->accessType = KEY;
+        accessString++;
+        for (; *accessString != '.' && *accessString != '[' && *accessString != '\0'; accessString++) {
+            if (*accessString == '\\') accessString++;
+        }
+        entry->keyLength = accessString - entry->data.key;
     }
     else {
-        *entry = (JSON_entry) {
-            .type = NULLTYPE
-        };
+        reject(ACCESS_STRING, EXPECTEDACCESSVAL);
+        return NULL;
     }
+    return accessString;
 }
 
 JSON_entry* JSON_deepAccess(JSON_entry* entry, char* accessString) {
+    // rules for an access string:
+    // - keys begin with a '.' and are assumed to continue until
+    // -- another '.',
+    // -- a '[' (indicating an index)
+    // -- a null terminator.
+    // - as suggested above, indices are encosed by '[]'
+    accessString = strdup(accessString);
+    stripWhitespace(accessString);
+    char* original = accessString;
+    struct accessEntry state;
+    JSON_entry* proxy = entry;
+    while (*accessString != '\0') {
+        accessString = accessStringNext(accessString, &state);
+        if (accessString == NULL) {
+            free(original);
+            return NULL;
+        }
+        if (state.accessType == KEY) {
+            char temp = state.data.key[state.keyLength];
+            state.data.key[state.keyLength] = '\0';
+            proxy = JSON_access(proxy, state.data.key);
+            if (proxy == NULL) return NULL;
+            state.data.key[state.keyLength] = temp;
+        }
+        else if (state.accessType == INDEX) {
+            proxy = JSON_index(proxy, state.data.index);
+            if (proxy == NULL) return NULL;
+        }
+        else {
+            reject(ACCESS_STRING, PANIC);
+            return NULL;
+        }
+    }
+    free(original);
+    return proxy;
 }
 
 JSON_entry** JSON_deepWaccess(JSON_entry* entry, char* accessString) {
+    accessString = strdup(accessString);
+    stripWhitespace(accessString);
+    char* original = accessString;
+    char* last = accessString;
+    JSON_entry* proxy = entry;
+    for (; *accessString != '\0'; accessString++) {
+        if (*accessString == '\\') continue;
+        if (*accessString == '.' || *accessString == '[') last = accessString;
+    }
+    struct accessEntry state;
+    accessStringNext(last, &state); // intentionally not assigning last to the result
+    *last = '\0';
+    last++;
+    proxy = JSON_deepAccess(proxy, original);
+    JSON_entry** returnVal;
+    if (state.accessType == KEY) {
+        returnVal = JSON_waccess(proxy, state.data.key);
+    }
+    else if (state.accessType == INDEX) {
+        returnVal = JSON_windex(proxy, state.data.index);
+    }
+    free(original);
+    return returnVal;
 }
 
 // parsing error handler
 
-void reject(JSON_ERROR_ENUM error) {
+static void reject(enum FAILTYPE f, JSON_ERROR_ENUM error) {
+    char* failtypeMessages[] = {
+        "Parsing failed: ",
+        "Incorrect usage: ",
+        "Invalid access string: "
+    };
+    fprintf(stderr, "%s", failtypeMessages[f]);
     JSON_ERROR = error;
     JSON_perror();
 }
@@ -512,7 +622,7 @@ static char* arrayNext(char* current, JSON_textEntry* state) {
             state->firstChar = current;
             current = skipString(current);
             if (current == NULL) {
-                reject(UNMATCHEDQUOTE);
+                reject(PARSE, UNMATCHEDQUOTE);
                 state->type = NONVAL;
                 return NULL;
             }
@@ -523,7 +633,7 @@ static char* arrayNext(char* current, JSON_textEntry* state) {
             state->firstChar = current;
             current = skipArray(current);
             if (current == NULL) {
-                reject(UNMATCHEDBRACKET);
+                reject(PARSE, UNMATCHEDBRACKET);
                 state->type = NONVAL;
                 return NULL;
             }
@@ -534,7 +644,7 @@ static char* arrayNext(char* current, JSON_textEntry* state) {
             state->firstChar = current;
             current = skipObject(current);
             if (current == NULL) {
-                reject(UNMATCHEDBRACE);
+                reject(PARSE, UNMATCHEDBRACE);
                 state->type = NONVAL;
                 return NULL;
             }
@@ -546,7 +656,7 @@ static char* arrayNext(char* current, JSON_textEntry* state) {
             state->firstChar = current;
             current = skipBool(current);
             if (current == NULL) {
-                reject(INVALIDBOOL);
+                reject(PARSE, INVALIDBOOL);
                 state->type = NONVAL;
                 return NULL;
             }
@@ -557,7 +667,7 @@ static char* arrayNext(char* current, JSON_textEntry* state) {
             state->firstChar = current;
             current = skipNull(current);
             if (current == NULL) {
-                reject(INVALIDNULL);
+                reject(PARSE, INVALIDNULL);
                 state->type = NONVAL;
                 return NULL;
             }
@@ -569,7 +679,7 @@ static char* arrayNext(char* current, JSON_textEntry* state) {
                 state->firstChar = current;
                 current = skipNumber(current);
                 if (current == NULL) {
-                    reject(INVALIDNUMBER);
+                    reject(PARSE, INVALIDNUMBER);
                     state->type = NONVAL;
                     return NULL;
                 }
@@ -577,7 +687,7 @@ static char* arrayNext(char* current, JSON_textEntry* state) {
                 break;
             }
             else {
-                reject(INVALIDVAL);
+                reject(PARSE, INVALIDVAL);
                 state->type = NONVAL;
                 return NULL;
             }
@@ -585,7 +695,7 @@ static char* arrayNext(char* current, JSON_textEntry* state) {
     // all cases, if successful, should leave `current` pointing to either a comma or the null terminator of a string.
     if (*current != ',') {
         if (*current != '\0') {
-            reject(EXPECTEDCOMMA);
+            reject(PARSE, EXPECTEDCOMMA);
             state->type = NONVAL;
             return NULL;
         }
@@ -602,13 +712,13 @@ static char* objectNext(char* current, JSON_textEntry* state) {
     char* name = current + 1;
     current = skipString(current);
     if (current == NULL) {
-        reject(UNMATCHEDQUOTE);
+        reject(PARSE, UNMATCHEDQUOTE);
         state->type = NONVAL;
         return NULL;
     }
     int nameLength = current - name - 1;
     if (*current != ':') {
-        reject(EXPECTEDCOLON);
+        reject(PARSE, EXPECTEDCOLON);
         state->type = NONVAL;
         return NULL;
     }
@@ -721,7 +831,7 @@ static int stripWhitespace(char* string) {
             char* temp = head;
             head = skipString(head);
             if (head == NULL) {
-                reject(UNMATCHEDQUOTE); 
+                reject(PARSE, UNMATCHEDQUOTE); 
                 return -1;
             }
             for (; temp < head; temp++) {
@@ -814,7 +924,7 @@ static JSON_entry* _JSON_fromString(char* string, bool base) {
             returnVal = &JSON_NULLVAL;
             break;
         default:
-            reject(PANIC);
+            reject(PARSE, PANIC);
     }
     free(originalNT);
     if (base) free(originalString);
@@ -828,14 +938,21 @@ JSON_entry* JSON_fromString(char* string) {
 JSON_entry* JSON_fromFile(char* filename) {
     int fd = open(filename, O_RDONLY);
     if (fd == -1) {
-        perror("JSON_fromFile");
+        perror("JSON_fromFile open");
         return NULL;
     }
-    size_t size;
-    ioctl(fd, FIONREAD, &size);
-    char* buffer = malloc(size + 1);
-    read(fd, buffer, size);
-    buffer[size] = 0;
+    struct stat st;
+    if (fstat(fd, &st) == -1) {
+        perror("JSON_fromFile fstat");
+        return NULL;
+    }
+    char* buffer = malloc(st.st_size + 1);
+    if (buffer == NULL) {
+        perror("JSON_fromFile malloc");
+        return NULL;
+    }
+    read(fd, buffer, st.st_size);
+    buffer[st.st_size] = 0;
     JSON_entry* returnVal = JSON_fromString(buffer);
     free(buffer);
     return returnVal;
@@ -861,12 +978,13 @@ void JSON_perror(void) {
         "Value invalid",
         "Expected ' , '",
         "Expected ' : '",
+        "Expected ' [ '",
+
+        "Valid access value (string, int) expected",
+        "Expected key; got empty string",
+
         "Something unexpected went wrong. Have fun"
     };
-
-    if (JSON_ERROR > 6) {
-        fprintf(stderr, "Parse failed: ");
-    }
 
     fprintf(stderr, "%s\n", errors[JSON_ERROR]);
 }
@@ -876,5 +994,7 @@ int main(void) {
     if (result == NULL) {
         return -1;
     }
-    JSON_write(stdout, result, 1);
+    JSON_entry** downloads = JSON_deepWaccess(result, ".downloads.server.url");
+    *downloads = JSON_newString("hello world");
+    JSON_write(stdout, JSON_access(result, "downloads"), 1);
 }

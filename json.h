@@ -76,6 +76,15 @@ typedef enum {
     INVALIDVAL,
     EXPECTEDCOMMA,
     EXPECTEDCOLON,
+
+    // access string error
+
+    EXPECTEDBRACKET,
+    EXPECTEDACCESSVAL,
+    EMPTYKEY,
+    
+    // unknown error
+
     PANIC
 
 } JSON_ERROR_ENUM;
@@ -122,7 +131,7 @@ JSON_entry* JSON_newObj(void);
 JSON_entry* JSON_newArray(void);
 JSON_entry* JSON_newString(char* base);
 
-void JSON_free(JSON_entry* entry, bool base); // recursively free a JSON object
+void JSON_free(JSON_entry* entry); // recursively free a JSON object
 
 JSON_entry* JSON_deepCopy(JSON_entry* entry);
 
