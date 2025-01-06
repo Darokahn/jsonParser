@@ -62,6 +62,7 @@ typedef enum {
     UPDATENONOBJ,
     APPENDNONARR,
     INDEXOUTOFBOUNDS,
+    KEYNOTFOUND,
     CATNONSTRING,
 
     // parsing errors

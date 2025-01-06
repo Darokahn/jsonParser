@@ -10,16 +10,13 @@
 #include "libs/unicode/unicode.h"
 
 /*
- * to do:
- * - deepCopy
- *
  * There may seem to be inconsistencies with error handling and returns. However, bar mistakes,
  * a consistent scheme is used:
  * return NULL (if applicable) for error (such as an un-parseable string or if a malloc fails).
  * return &JSON_NULLVAL (if applicable) when a json entry was expected but not found.
  * use function `reject` if the error bars the function from being used in a pipeline (Indexing a non-array).
  * set JSON_ERROR without `reject` if the function can't fulfill its usual purpose, but can still return a logical value
- * * (Indexing an array out of bounds returns &JSON_NULLVAL).
+ * * (Indexing an array out of bounds returns &JSON_NULLVAL without calling `reject`).
 */
 
 static int unescapeString(char*);
@@ -152,8 +149,8 @@ JSON_entry* JSON_newObj(void) {
 
 JSON_entry* JSON_access(JSON_entry* entry, char* key) {
     if (entry->type != OBJECT) { 
-        JSON_ERROR = ACCESSNONOBJ;
-        return &JSON_NULLVAL;
+        reject(USAGE, ACCESSNONOBJ);
+        return NULL;
     }
     for (int i = 0; i < entry->data.object.values->data.array.length; i++) {
         if (strcmp(key, entry->data.object.keys[i]) == 0) {
@@ -165,18 +162,18 @@ JSON_entry* JSON_access(JSON_entry* entry, char* key) {
 
 JSON_entry** JSON_waccess(JSON_entry* entry, char* key) {
     if (entry->type != OBJECT) { 
-        JSON_ERROR = ACCESSNONOBJ;
+        reject(USAGE, ACCESSNONOBJ);
         return NULL;
     }
     int i;
     for (i = 0; i < entry->data.object.values->data.array.length; i++) {
         if (strcmp(key, entry->data.object.keys[i]) == 0) {
-            break;
+            JSON_free(entry->data.object.values->data.array.items[i]);
+            return &(entry->data.object.values->data.array.items[i]);
         }
     }
-    JSON_free(entry->data.object.values->data.array.items[i]);
-    return &(entry->data.object.values->data.array.items[i]);
-
+    reject(USAGE, KEYNOTFOUND);
+    return NULL;
 }
 
 int JSON_getKeyIndex(JSON_entry* entry, char* key) {
@@ -382,6 +379,33 @@ void JSON_free(JSON_entry* entry) {
     free(entry);
 }
 
+JSON_entry* JSON_deepCopy(JSON_entry* entry) {
+    switch (entry->type) {
+        case STRING:
+            return JSON_newString(entry->data.string.str);
+        case NUMBER:
+            return JSON_newNumber(entry->data.number);
+        case OBJECT:
+            JSON_entry* obj = JSON_newObj();
+            for (int i = 0; i < entry->data.object.values->data.array.length; i++) {
+                JSON_update(obj, entry->data.object.keys[i], JSON_deepCopy(entry->data.object.values->data.array.items[i]));
+            }
+            return obj;
+        case ARRAY:
+            JSON_entry* arr = JSON_newArray();
+            for (int i = 0; i < entry->data.array.length; i++) {
+                JSON_append(arr, JSON_deepCopy(entry->data.array.items[i]));
+            }
+            return arr;
+        case BOOL:
+            return JSON_newBool(entry->data.boolean);
+        case NULLTYPE:
+            return &JSON_NULLVAL;
+        default:
+            break;
+    }
+}
+
 struct accessEntry {
     enum {INDEX, KEY} accessType;
     union {
@@ -433,23 +457,24 @@ JSON_entry* JSON_deepAccess(JSON_entry* entry, char* accessString) {
     while (*accessString != '\0') {
         accessString = accessStringNext(accessString, &state);
         if (accessString == NULL) {
-            free(original);
-            return NULL;
+            proxy = NULL;
+            break;
         }
         if (state.accessType == KEY) {
             char temp = state.data.key[state.keyLength];
             state.data.key[state.keyLength] = '\0';
             proxy = JSON_access(proxy, state.data.key);
-            if (proxy == NULL) return NULL;
+            if (proxy == NULL) break;
             state.data.key[state.keyLength] = temp;
         }
         else if (state.accessType == INDEX) {
             proxy = JSON_index(proxy, state.data.index);
-            if (proxy == NULL) return NULL;
+            if (proxy == NULL) break;
         }
         else {
             reject(ACCESS_STRING, PANIC);
-            return NULL;
+            proxy = NULL;
+            break;
         }
     }
     free(original);
@@ -467,7 +492,10 @@ JSON_entry** JSON_deepWaccess(JSON_entry* entry, char* accessString) {
         if (*accessString == '.' || *accessString == '[') last = accessString;
     }
     struct accessEntry state;
-    accessStringNext(last, &state); // intentionally not assigning last to the result
+    if (accessStringNext(last, &state) == NULL) {
+        free(original);
+        return NULL;
+    }
     *last = '\0';
     last++;
     proxy = JSON_deepAccess(proxy, original);
@@ -966,15 +994,16 @@ void JSON_perror(void) {
         "Attempt to update non-object using JSON_update",
         "Attempt to append to non-array using JSON_append",
         "Index out of bounds",
+        "Key not found",
         "Attempt to catenate to non-string using JSON_strCat",
 
         "Unmatched ' \" '",
         "Unmatched ' [ '",
         "Unmatched ' { ' ",
         "Number invalid",
-        "Value invalid",
-        "Value invalid",
-        "Value invalid",
+        "Name invalid",
+        "Bool invalid",
+        "NULL invalid",
         "Value invalid",
         "Expected ' , '",
         "Expected ' : '",
@@ -991,10 +1020,9 @@ void JSON_perror(void) {
 
 int main(void) {
     JSON_entry* result = JSON_fromFile("test.json");
+    result = JSON_deepCopy(result);
     if (result == NULL) {
         return -1;
     }
-    JSON_entry** downloads = JSON_deepWaccess(result, ".downloads.server.url");
-    *downloads = JSON_newString("hello world");
-    JSON_write(stdout, JSON_access(result, "downloads"), 1);
+    JSON_write(stdout, result, 1);
 }
