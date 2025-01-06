@@ -1017,12 +1017,3 @@ void JSON_perror(void) {
 
     fprintf(stderr, "%s\n", errors[JSON_ERROR]);
 }
-
-int main(void) {
-    JSON_entry* result = JSON_fromFile("test.json");
-    result = JSON_deepCopy(result);
-    if (result == NULL) {
-        return -1;
-    }
-    JSON_write(stdout, result, 1);
-}
