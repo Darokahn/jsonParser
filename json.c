@@ -876,9 +876,6 @@ static int stripWhitespace(char* string) {
 }
 
 static JSON_entry* _JSON_fromString(char* string, bool base) {
-    if (strncmp(string, "\"Payment", 8) == 0) {
-        printf("okay\n");
-    }
     JSON_textEntry e;
     JSON_textEntry* entry = &e;
     char* originalString;
