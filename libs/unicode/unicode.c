@@ -3,41 +3,31 @@
 #include <stdio.h>
 #include "unicode.h"
 
-void printBytes(char* string) {
-    for (; *string != 0; string++) {
-        printf("%x ", (uint8_t)*string);
-    }
-    printf("\n");
-}
+static int UNICODE_THRESHOLDS[6] = {
+    0x80, 0x800, 0x10000, 0x200000, 0x4000000, 0x80000000
+};
 
-char* UNICODE_fromCodePoint(int code) {
-    if (code > 0x10ffff) {
-        // utf-8 defines a 4-byte limit for unicode characters, but still defines behavior for up to 6-byte characters.
-        // this limit is arbitrary and can be changed if your application uses an expanded character encoding.
-        fprintf(stderr, "UNICODE_fromCodePoint: code out of range\n");
-        return NULL;
-    }
-    char* bytes = strndup(UNICODE_TEMPLATEBYTES, 6);
-    if (bytes == NULL) {
-        perror("UNICODE_fromCodePoint");
-        return bytes;
-    }
+static char UNICODE_INITIALS[6] = {
+    0x0, 0xC0, 0xE0, 0xF0, 0xF8, 0xFC
+};
+
+int UNICODE_fromCodePoint(int code, char* out) {
+    if (code > 0x10ffff) return 0;
 
     int* threshold;
     for (threshold = UNICODE_THRESHOLDS; *threshold <= code; threshold++);
 
     int byteCount = (threshold - UNICODE_THRESHOLDS) + 1;
-    bytes[0] = UNICODE_INITIALS[byteCount - 1];
+    memset(out, 0x80, byteCount);
+    out[0] = UNICODE_INITIALS[byteCount - 1];
+
+    char mask = 0x3f;
+    if (byteCount == 1) mask = 0xFF;
 
     int i;
-    char mask = 0x3f;
-
-    if (byteCount == 1) mask = 0xFF;
-    for (i = 0; i < byteCount; i++) {
-        bytes[i] |= (code >> (6 * (byteCount - i - 1))) & mask;
-    }
-    bytes[i] = '\0';
-    return bytes;
+    for (i = 0; i < byteCount; i++) 
+        out[i] |= (code >> (6 * (byteCount - i - 1))) & mask;
+    return i;
 }
 
 int UNICODE_toCodePoint(char* string) {

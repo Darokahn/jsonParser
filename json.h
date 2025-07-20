@@ -90,8 +90,6 @@ typedef enum {
 
 } JSON_ERROR_ENUM;
 
-JSON_ERROR_ENUM JSON_ERROR = NONE;
-
 typedef struct {
     char* name;
     int nameLength;
@@ -101,6 +99,8 @@ typedef struct {
 } JSON_textEntry;
 
 JSON_entry* JSON_fromString(char* string);
+
+JSON_entry* JSON_fromFile(char* filename);
 
 JSON_entry* JSON_access(JSON_entry* entry, char* key); // like object["key"] in javaScript
 
@@ -128,6 +128,8 @@ void JSON_strCat(JSON_entry* entry, char* newStr); // dynamically concatenates t
 
 void JSON_perror(void); // print custom messages based on the value held in `JSON_ERROR_ENUM JSON_ERROR`
 
+void JSON_write(FILE* buffer, JSON_entry* entry, int indent);
+
 JSON_entry* JSON_newObj(void);
 JSON_entry* JSON_newArray(void);
 JSON_entry* JSON_newString(char* base);
@@ -136,7 +138,4 @@ void JSON_free(JSON_entry* entry); // recursively free a JSON object
 
 JSON_entry* JSON_deepCopy(JSON_entry* entry);
 
-JSON_entry JSON_NULLVAL = {
-    .type = NULLTYPE,
-};
 #endif

@@ -29,6 +29,12 @@ enum FAILTYPE {
     ACCESS_STRING
 };
 
+JSON_ERROR_ENUM JSON_ERROR = NONE;
+
+JSON_entry JSON_NULLVAL = {
+    .type = NULLTYPE,
+};
+
 static void reject(enum FAILTYPE, JSON_ERROR_ENUM);
 
 static const char jsonEscapes[128] = {
@@ -778,13 +784,12 @@ static int getCodePoint(char* template) {
 
 static int decodeUnicode(char* template) {
     // assumes `template` is aligned to the 'u' in a unicode escape sequence (\u0041)
+    char buffer[8];
     int codePoint = getCodePoint(template);
-    char* unicode = UNICODE_fromCodePoint(codePoint);
-    int length = strlen(unicode);
+    int length = UNICODE_fromCodePoint(codePoint, buffer);
     int beginning = 5 - length;
-    strcpy(template + beginning, unicode);
+    strcpy(template + beginning, buffer);
 
-    free(unicode);
     return beginning + 1;
 }
 
