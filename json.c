@@ -519,7 +519,7 @@ JSON_entry** JSON_deepWaccess(JSON_entry* entry, char* accessString) {
 // parsing error handler
 
 static void reject(enum FAILTYPE f, JSON_ERROR_ENUM error) {
-    char* failtypeMessages[] = {
+    static char* failtypeMessages[] = {
         "Parsing failed: ",
         "Incorrect usage: ",
         "Invalid access string: "
@@ -708,6 +708,7 @@ static char* arrayNext(char* current, JSON_textEntry* state) {
             state->length = current - state->firstChar;
             break;
         default:
+            printf("%d\n", *current);
             if (isFloatChar(*current)) {
                 state->type = NUMBER;
                 state->firstChar = current;

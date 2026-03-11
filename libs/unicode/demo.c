@@ -9,7 +9,7 @@ int main() {
     char* end = string;
     strcpy(string, "hello");
     end += strsizeof("hello");
-    end += UNICODE_fromCodePoint(0x263a, end);
+    end += UNICODE_fromCodePoint(0x1f600, end);
     end[0] = 0;
     printf("%s\n", string);
 }
